@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import BookingFlow from './BookingFlow'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -172,16 +173,8 @@ export default async function BarberPage(
         </div>
       )}
 
-      {/* Book Now CTA */}
-      {services.length > 0 && (
-        <button style={{
-          width: '100%', height: 54, background: '#C9A85C',
-          border: 'none', borderRadius: 14, cursor: 'pointer',
-          fontSize: 16, fontWeight: 800, color: '#1E2432',
-        }}>
-          Book Now
-        </button>
-      )}
+      {/* Booking flow */}
+      <BookingFlow barberId={barber.id} services={services} />
 
       <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: 12, marginTop: 40 }}>
         Powered by CutSpace
