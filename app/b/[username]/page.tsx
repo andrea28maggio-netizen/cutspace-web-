@@ -53,9 +53,9 @@ function addDays(d: Date, n: number): Date {
 }
 
 async function fetchBarber(username: string): Promise<BarberProfile | null> {
-  const { data, error } = await supabase
+  const { data: bp, error } = await supabase
     .from('barber_profiles')
-    .select('*, profiles(full_name)')
+    .select('*')
     .eq('username', username)
     .single()
   if (error) {
@@ -64,7 +64,16 @@ async function fetchBarber(username: string): Promise<BarberProfile | null> {
     }
     return null
   }
-  return data as BarberProfile | null
+  if (!bp) return null
+
+  // Separate query for full_name — avoids relying on FK join discovery
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', bp.user_id)
+    .single()
+
+  return { ...bp, profiles: { full_name: profile?.full_name ?? username } } as BarberProfile
 }
 
 async function fetchServices(barberId: string): Promise<Service[]> {
