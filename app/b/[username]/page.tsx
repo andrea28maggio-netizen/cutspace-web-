@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import BookingFlow from './BookingFlow'
 
+export const dynamic = 'force-dynamic'
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -51,11 +53,17 @@ function addDays(d: Date, n: number): Date {
 }
 
 async function fetchBarber(username: string): Promise<BarberProfile | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('barber_profiles')
     .select('*, profiles(full_name)')
     .eq('username', username)
     .single()
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('[fetchBarber] username=%s code=%s msg=%s', username, error.code, error.message)
+    }
+    return null
+  }
   return data as BarberProfile | null
 }
 
