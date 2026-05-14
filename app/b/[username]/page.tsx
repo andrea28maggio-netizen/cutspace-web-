@@ -25,6 +25,31 @@ type BarberProfile = {
   profiles: { full_name: string }
 }
 
+export type AvailDay = {
+  date: string       // 'YYYY-MM-DD'
+  startTime: string  // 'HH:MM' 24h
+  endTime: string    // 'HH:MM' 24h
+  label: string      // 'Mon 14 Apr' for display
+}
+
+export type BookedSlot = {
+  slot_date: string  // 'YYYY-MM-DD'
+  slot_time: string  // 'HH:MM' 24h
+}
+
+function toDateStr(d: Date): string {
+  const y  = d.getFullYear()
+  const m  = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d)
+  r.setDate(r.getDate() + n)
+  return r
+}
+
 async function fetchBarber(username: string): Promise<BarberProfile | null> {
   const { data } = await supabase
     .from('barber_profiles')
@@ -42,6 +67,38 @@ async function fetchServices(barberId: string): Promise<Service[]> {
     .eq('is_active', true)
     .order('price_aud')
   return (data ?? []) as Service[]
+}
+
+async function fetchAvailability(barberId: string): Promise<AvailDay[]> {
+  const today = new Date()
+  const from  = toDateStr(addDays(today, 1))
+  const to    = toDateStr(addDays(today, 14))
+  const { data } = await supabase
+    .from('barber_availability')
+    .select('specific_date, start_time, end_time')
+    .eq('barber_id', barberId)
+    .eq('is_available', true)
+    .gte('specific_date', from)
+    .lte('specific_date', to)
+    .order('specific_date')
+  return (data ?? []).map(row => ({
+    date:      row.specific_date as string,
+    startTime: row.start_time as string,
+    endTime:   row.end_time as string,
+    label:     new Date(row.specific_date + 'T12:00:00').toLocaleDateString('en-AU', {
+      weekday: 'short', day: 'numeric', month: 'short',
+    }),
+  }))
+}
+
+async function fetchBookedSlots(barberId: string, dates: string[]): Promise<BookedSlot[]> {
+  if (dates.length === 0) return []
+  const { data } = await supabase
+    .from('client_bookings')
+    .select('slot_date, slot_time')
+    .eq('barber_id', barberId)
+    .in('slot_date', dates)
+  return (data ?? []) as BookedSlot[]
 }
 
 export async function generateMetadata(
@@ -69,7 +126,12 @@ export default async function BarberPage(
   const barber = await fetchBarber(username)
   if (!barber) notFound()
 
-  const services = await fetchServices(barber.id)
+  const [services, availDays] = await Promise.all([
+    fetchServices(barber.id),
+    fetchAvailability(barber.id),
+  ])
+  const bookedSlots = await fetchBookedSlots(barber.id, availDays.map(d => d.date))
+
   const name = barber.profiles?.full_name ?? username
 
   return (
@@ -174,7 +236,12 @@ export default async function BarberPage(
       )}
 
       {/* Booking flow */}
-      <BookingFlow barberId={barber.id} services={services} />
+      <BookingFlow
+        barberId={barber.id}
+        services={services}
+        availabilityDays={availDays}
+        bookedSlots={bookedSlots}
+      />
 
       <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: 12, marginTop: 40 }}>
         Powered by CutSpace
